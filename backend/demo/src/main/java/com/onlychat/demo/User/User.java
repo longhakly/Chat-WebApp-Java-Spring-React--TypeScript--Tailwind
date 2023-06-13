@@ -6,6 +6,7 @@ import com.onlychat.demo.GroupChat.GroupChat;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -16,7 +17,7 @@ public class User {
     private String id;
     private String username;
     private boolean anonymous;
-
+    private LocalDateTime timestamp;//add
     @Column(name = "profile_image")
     private String profileImage;
 
@@ -56,5 +57,13 @@ public class User {
 
     public void setProfileImage(String profileImage) {
         this.profileImage = profileImage;
+    }
+    //add
+    public LocalDateTime getTimestamp() {
+        return timestamp;
+    }
+    //add
+    public void setTimestamp(LocalDateTime timestamp) {
+        this.timestamp = timestamp;
     }
 }

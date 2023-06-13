@@ -2,6 +2,8 @@ package com.onlychat.demo.User;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static com.onlychat.demo.Utility.GenerateName.generateName;
@@ -22,6 +24,7 @@ public class UserServiceImpl implements UserService {
         String imageUrl = generateAvatarUrl(randomName);
         returnValue.setProfileImage(imageUrl);
         returnValue.setId(userId);
+        returnValue.setTimestamp(LocalDateTime.now()); //add
         repo.save(returnValue);
         return returnValue;
     }

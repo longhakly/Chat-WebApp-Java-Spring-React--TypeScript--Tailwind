@@ -24,7 +24,7 @@ public class GroupChatCleanupTask {
     private GroupChatService groupChatService;
 
     @Transactional
-    @Scheduled(fixedRate = 5 * 60 * 1000) // Run every 5 minutes
+    @Scheduled(fixedRate = 100 * 60 * 1000) // Run every 5 minutes
     public void cleanupGroupChats() {
         System.out.println("called1");
         List<GroupChat> groupChats = groupChatRepository.findAll();
