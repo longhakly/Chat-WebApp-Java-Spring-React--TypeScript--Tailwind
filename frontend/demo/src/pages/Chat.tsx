@@ -1,11 +1,12 @@
 import Logo from "../assets/logo.png";
 import Profile from "../assets/profile.png";
 import SendIcon from "../assets/send.png";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from 'react-router-dom';
 import { getAndUpdateGroupMemberAPI } from "../axios/getAndUpdateGroup";
 import sockjs from "sockjs-client/dist/sockjs"
 import Stomp from 'stompjs';
+import { createChatAPI } from "../axios/createChat";
 type Chat = {
   id: string;
   message: string;
@@ -16,7 +17,6 @@ type Chat = {
   };
   timestamp: [number, number, number, number, number, number, number];
 };
-
 
 interface GroupChat {
   username: string;
@@ -53,6 +53,7 @@ function ChatPage() {
         console.log("1",userId);
       }
       try {
+        //chnage fetch api to get the group by id then check userid from cookie in group by id, if user is not in group then fetch add(make api adjustment to return only user object) to group then update userid in cookie
         if (groupId && userId) {
           console.log("2",userId);
           const getAndUpdateGroupMemberAPIResponse = await getAndUpdateGroupMemberAPI(groupId, userId);
@@ -107,6 +108,7 @@ function ChatPage() {
               groupChats: sortedGroupChats,
             };
             setGroup(updatedGroup);
+            console.log("updatedGroup", updatedGroup);
             const last_index = updatedGroup.groupChats.length - 1;
             document.cookie = `UserId=${updatedGroup.groupChats[last_index].id}; path=/; SameSite=None; Secure;`;
           }
@@ -118,11 +120,9 @@ function ChatPage() {
     fetchData();
   }, [groupId]);
 
+  // Socket
   const [messages, setMessages] = useState<Chat[]>([]);
-  const [messageInput, setMessageInput] = useState('');
-
   let stompClient: Stomp.Client | null = null;
-
   const connect = () => {
     const socket: any = new sockjs('http://localhost:8080/ws');
     stompClient = Stomp.over(socket);
@@ -130,11 +130,20 @@ function ChatPage() {
       console.log('Connected: ' + frame);
       stompClient?.subscribe('/topic/group/' + groupId, (message: Stomp.Message) => {
         const chatMessage: Chat = JSON.parse(message.body || '');
-        showChatMessage(chatMessage.sender.id, chatMessage.message, chatMessage.sender.username);
+        showChatMessage(chatMessage.sender.id, chatMessage.message, chatMessage.sender.username, chatMessage.sender.profileImage);
       });
     });
   };
-
+  const showChatMessage = (id:string ,message: string, username: string, profileImage:string) => {
+    setMessages(prevMessages =>
+      prevMessages.concat({
+        id, // replace with an appropriate ID for the chat message
+        message,
+        sender: {id, username, profileImage}, // replace with the profile image URL
+        timestamp: [0, 0, 0, 0, 0, 0, 0],
+      })
+    );
+  };
   const disconnect = () => {
     if (stompClient !== null && stompClient.connected) {
       stompClient.disconnect(() => {
@@ -142,61 +151,30 @@ function ChatPage() {
       });
     }
   };
-
-  const sendChatMessage = (message: string) => {
-    const payload = {
-      groupId: groupId,
-      message: message,
-      userId: userId,
-    };
-
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    const requestOptions = {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(payload),
-    };
-
-    fetch('/chats', requestOptions)
-      .then(response => response.json())
-      .then(data => {
-        // Handle the response data as needed
-        console.log(data); // Example: Logging the data to the console
-      })
-      .catch(error => {
-        // Handle any errors that occurred during the request
-        console.error(error); // Example: Logging the error to the console
-      });
-  };
-
-  const showChatMessage = (id:string ,message: string, username: string) => {
-    setMessages(prevMessages =>
-      prevMessages.concat({
-        id, // replace with an appropriate ID for the chat message
-        message,
-        sender: {id, username, profileImage: 'some-profile-image-url' }, // replace with the profile image URL
-        timestamp: [0, 0, 0, 0, 0, 0, 0],
-      })
-    );
-  };
-  
-
   useEffect(() => {
     connect();
-
     return () => {
       disconnect();
     };
   }, []);
-  console.log("messages",messages);
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const messageInput = useRef<HTMLInputElement>(null);
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (messageInput.trim() !== '') {
-      sendChatMessage(messageInput);
-      setMessageInput('');
+    const message_Input = messageInput.current?.value?? "";
+    if (message_Input.trim() !== '' && userId && groupId) {
+      try {
+        const createChatResponse = await createChatAPI(groupId, userId, message_Input);
+        if(createChatResponse){
+          console.log("createChatResponse",createChatResponse.data);
+          messageInput.current!.value = "";
+        }
+        else{
+          console.log("Error fetching data");
+        }
+      } catch (error) {
+        console.log('Error fetching data', error);
+      }
     }
   };
   return (
@@ -250,11 +228,42 @@ function ChatPage() {
                 </div>
               )
             )}
+            {messages.map((item, index) =>
+              item.sender.id === userId ? (
+                <div className="flex justify-end items-center min-h-[50px] space-x-2" key={index}>
+                  <div className="block">
+                    <div className="flex justify-end">
+                      <p className="text-[8px] text-right text-gray-400 mx-4 w-[200px]">{item.sender.username}</p>
+                    </div>
+                    <div className="flex justify-end">
+                      <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] max-w-[40%] overflow-x-auto">
+                        <p>{item.message}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <img src={item.sender.profileImage} className="w-[40px]" />
+                </div>
+              ) : (
+                <div className="flex justify-start items-center min-h-[50px] space-x-2" key={index}>
+                  <img src={item.sender.profileImage} className="w-[40px]" />
+                  <div className="block relative">
+                    <p className="text-[8px] text-gray-400 mx-4 w-[200px]">{item.sender.username}</p>
+                    <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] max-w-[40%] overflow-x-auto">
+                      <p>{item.message}</p>
+                    </div>
+                  </div>
+                </div>
+              )
+            )}
       </div>
+      {/* <div className="w-full px-[10%] block mt-10 mb-20 space-y-4 ">
+        
+      </div> */}
       <div className="fixed bottom-0 w-full bg-white shadow-lg">
         <div className="w-full my-4 flex justify-center items-center space-x-2 px-[10%]">
           <div className="w-full">
             <input
+              ref={messageInput}
               type="text"
               placeholder="Write a message..."
               className="bg-[#D9D9D9] w-full px-4 py-2 rounded-[10px] focus:outline-none focus:border-[2px] focus:border-[#38B6FF]"
