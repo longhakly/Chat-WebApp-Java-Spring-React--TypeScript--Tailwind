@@ -7,6 +7,10 @@ import sockjs from "sockjs-client/dist/sockjs"
 import Stomp from 'stompjs';
 import { createChatAPI } from "../axios/createChat";
 import { getGroupChatByIdAPI } from "../axios/getGroupChatById";
+import { deleteGroupChatByIdAPI } from "../axios/deleteGroupChatById";
+import { createBrowserHistory } from 'history';
+
+const history = createBrowserHistory();
 
 type Chat = {
   id: string;
@@ -40,14 +44,16 @@ function ChatPage() {
     }
     return null;
   }
+
+
+  // Fetch GroupChat Data  
   const [userId, setUserId] = useState(getCookieValue('UserId'));
-  // Fetch GroupChat Data
   const { groupId } = useParams();
-  const [Group, setGroup] = useState<{ userCount: number; chats: Chat[]; groupChats: GroupChat[] } | null>(null);
+  const [Group, setGroup] = useState<{ userCount: number; name:String, chats: Chat[]; groupChats: GroupChat[] } | null>(null);
   useEffect(() => {
     const fetchData = async () => {
       if (userId === null){
-        setUserId(" ");
+        setUserId("Not Found");
       }
       try {
         console.log("called1")
@@ -96,8 +102,6 @@ function ChatPage() {
                   setUserId(UpdateGroupMemberAPIResponse.data.user.id);
                   document.cookie = `UserId=${UpdateGroupMemberAPIResponse.data.user.id}; path=/; SameSite=None; Secure;`;
                   console.log("success");
-                  // Reload the page after updating the userId
-                  // window.location.reload();
                 }
               } catch (error){
                 console.error('Error fetching data:', error);
@@ -105,7 +109,6 @@ function ChatPage() {
             }
           }
         }
-        
       } catch (error) {
         console.error('Error fetching data:', error);
       }
@@ -130,9 +133,9 @@ function ChatPage() {
   const showChatMessage = (id:string ,message: string, username: string, profileImage:string) => {
     setMessages(prevMessages =>
       prevMessages.concat({
-        id, // replace with an appropriate ID for the chat message
+        id, 
         message,
-        sender: {id, username, profileImage}, // replace with the profile image URL
+        sender: {id, username, profileImage},
         timestamp: [0, 0, 0, 0, 0, 0, 0],
       })
     );
@@ -170,62 +173,97 @@ function ChatPage() {
       }
     }
   };
+
+  // Scroll to bottom
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const chatContainer = chatContainerRef.current;
+    if (chatContainer) {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+  }, [chatContainerRef.current]);
+
+  // Handle Enter key press submit
+  const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleSubmit(event);
+    }
+  };
+
+  const handleEndChat = async () => {
+    try{
+      if (groupId){
+        const endGroupChatAPIResponse = await deleteGroupChatByIdAPI(groupId);
+        if (endGroupChatAPIResponse){
+          console.log("endGroupChatAPIResponse", endGroupChatAPIResponse.data);
+          history.push("/");
+          location.reload();
+        }
+      }
+    }catch (error){
+      console.error('Error fetching data:', error);
+    }
+  }
   return (
     <>
       <div className="flex justify-center items-center w-full h-[100px] px-10 shadow-lg">
         <div className="w-[30%]">
           <img src={Logo} alt="logo" className="w-[150px] h-[70px]" />
         </div>
-        <div className="w-[40%] flex justify-start items-start relative ">
+        <div className="w-[40%] flex justify-center items-start relative ">
             <div className="block">
-              <div className="text-[20px] font-bold">{Group?.name}</div>
-              <p className="text-[10px] font-500 text-[#5F5F5F]">{Group?.userCount} People</p>
+              <div className="text-[20px] font-bold text-center">{Group?.name}</div>
+              <p className="text-[10px] font-500 text-[#5F5F5F] text-center">{Group?.userCount} People</p>
             </div>
         </div>
         <div className="w-[30%] flex justify-end items-center">
-          <button className="bg-red-500 text-white px-4 py-2 rounded-[10px]">End Chat</button>
+          <button 
+          onClick={handleEndChat}
+          className="bg-red-500 text-white px-5 py-1 rounded-[10px] text-[12px] font-bold">End Chat</button>
         </div>
       </div>
-      <div className="w-full px-[10%] block mt-10 mb-20 space-y-4 ">
+      <div className="w-full px-[10%] block mt-0 pt-10 mb-0 pb-10 space-y-4 overflow-y-scroll h-[720px] scroll-auto" ref={chatContainerRef}>
         {Group?.chats &&
           Group?.chats
             .map((item, index) =>
               item.sender.id === userId ? (
                 <div className="flex justify-end items-center min-h-[50px] space-x-2" key={index}>
-                  <div className="block">
+                  <div className="block max-w-[50%]">
                     <div className="flex justify-end">
-                      <p className="text-[8px] text-right text-gray-400 mx-4 w-[200px]">{item.sender.username}</p>
+                      <p className="text-[9px] text-gray-400 mx-4 min-w-auto w-auto inline-block max-[100%]">{item.sender.username}</p>
                     </div>
                     <div className="flex justify-end">
-                      <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] max-w-[40%] overflow-x-auto">
-                        <p>{item.message}</p>
+                      <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] min-w-auto max-w-[100%]">
+                        <p className="w-auto inline-block overflow-wrap break-word">{item.message}</p>
                       </div>
                     </div>
                   </div>
-                  <img src={item.sender.profileImage} className="w-[40px]" />
+                  <img src={item.sender.profileImage} className="w-[45px]" />
                 </div>
               ) : (
-                <div className="flex justify-start items-center min-h-[50px] space-x-2" key={index}>
-                  <img src={item.sender.profileImage} className="w-[40px]" />
-                  <div className="block relative">
-                    <p className="text-[8px] text-gray-400 mx-4 w-[200px]">{item.sender.username}</p>
-                    <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] max-w-[40%] overflow-x-auto">
-                      <p>{item.message}</p>
-                    </div>
+              <div className="flex justify-start items-center min-h-[50px] space-x-2 " key={index}>
+                <img src={item.sender.profileImage} className="w-[45px]" />
+                <div className="block relative max-w-[50%]">
+                  <p className="text-[9px] text-gray-400 mx-4 min-w-auto w-auto inline-block max-[100%]">{item.sender.username}</p>
+                  <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] min-w-auto max-w-[100%]">
+                    <p className="w-auto inline-block overflow-wrap break-word">{item.message}</p>
                   </div>
                 </div>
+              </div>
+
               )
             )}
             {messages.map((item, index) =>
               item.sender.id === userId ? (
                 <div className="flex justify-end items-center min-h-[50px] space-x-2" key={index}>
-                  <div className="block">
+                  <div className="block max-w-[50%]">
                     <div className="flex justify-end">
-                      <p className="text-[8px] text-right text-gray-400 mx-4 w-[200px]">{item.sender.username}</p>
+                      <p className="text-[8px] text-gray-400 mx-4 min-w-auto w-auto inline-block max-[100%]">{item.sender.username}</p>
                     </div>
                     <div className="flex justify-end">
-                      <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] max-w-[40%] overflow-x-auto">
-                        <p>{item.message}</p>
+                      <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] min-w-auto max-w-[100%]">
+                        <p className="w-auto inline-block overflow-wrap break-word">{item.message}</p>
                       </div>
                     </div>
                   </div>
@@ -233,14 +271,14 @@ function ChatPage() {
                 </div>
               ) : (
                 <div className="flex justify-start items-center min-h-[50px] space-x-2" key={index}>
-                  <img src={item.sender.profileImage} className="w-[40px]" />
-                  <div className="block relative">
-                    <p className="text-[8px] text-gray-400 mx-4 w-[200px]">{item.sender.username}</p>
-                    <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] max-w-[40%] overflow-x-auto">
-                      <p>{item.message}</p>
-                    </div>
+                <img src={item.sender.profileImage} className="w-[40px]" />
+                <div className="block relative max-w-[50%]">
+                  <p className="text-[8px] text-gray-400 mx-4 min-w-auto w-auto inline-block max-[100%]">{item.sender.username}</p>
+                  <div className="bg-[#CCE0EE] min-h-[50px] flex items-center px-4 py-1 rounded-[10px] min-w-auto max-w-[100%]">
+                    <p className="w-auto inline-block overflow-wrap break-word">{item.message}</p>
                   </div>
                 </div>
+              </div>
               )
             )}
       </div>
@@ -252,6 +290,7 @@ function ChatPage() {
           <div className="w-full">
             <input
               ref={messageInput}
+              onKeyPress={handleKeyPress}
               type="text"
               placeholder="Write a message..."
               className="bg-[#D9D9D9] w-full px-4 py-2 rounded-[10px] focus:outline-none focus:border-[2px] focus:border-[#38B6FF]"
