@@ -5,10 +5,13 @@ import com.onlychat.demo.User.UserRespository;
 import com.onlychat.demo.User.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.apache.commons.lang3.tuple.Pair;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
 
 @Service
 public class GroupChatServiceImpl implements GroupChatService{
@@ -41,23 +44,28 @@ public class GroupChatServiceImpl implements GroupChatService{
     }
 
     @Override
-    public GroupChat addToGroupById(String groupId, String userId) {
+    public Map<String, Object> addToGroupById(String groupId, String userId) {
         GroupChat groupChat = group_chat_repo.findById(groupId).orElse(null);
+        Map<String, Object> result = new HashMap<>();
+
         if (groupChat != null) {
             User user = user_repo.findById(userId).orElse(null);
             if (user != null && groupChat.containsUser(user)) {
-                // Add the user as a participant
-                groupChat.addParticipant(user);
+                result.put("Message","User already in group");
+            } else {
+                // Create a new user then add to group
+                User createdUser = userService.createUser();
+                groupChat.addParticipant(createdUser);
                 group_chat_repo.save(groupChat);
-            } else{
-                // Create a new user
-                User create_user = userService.createUser();
-                groupChat.addParticipant(create_user);
-                group_chat_repo.save(groupChat);
+                result.put("Message","Added User to group");
+                result.put("groupChat", groupChat);
+                result.put("user", createdUser);
             }
         }
-        return groupChat;
+
+        return result;
     }
+
 
     @Override
     public GroupChat deleteGroupById(String groupId) {

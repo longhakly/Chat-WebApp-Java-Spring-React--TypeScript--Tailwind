@@ -45,7 +45,7 @@ public class GroupChatCleanupTask {
 
     private boolean isInactive(Date lastActivityTime) {
         Calendar cal = Calendar.getInstance();
-        cal.add(Calendar.MINUTE, -5);
+        cal.add(Calendar.MINUTE, -100);
         Date thresholdTime = cal.getTime();
 
         System.out.println("Threshold Time: " + thresholdTime);

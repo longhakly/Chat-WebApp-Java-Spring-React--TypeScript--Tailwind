@@ -8,8 +8,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.apache.commons.lang3.tuple.Pair;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/groups")
@@ -47,12 +50,13 @@ public class GroupChatController {
     }
 
     @PutMapping("add/{groupId}")
-    public ResponseEntity<GroupChat> addToGroupById(@PathVariable String groupId, @RequestBody String requestJsonData) throws JsonProcessingException {
+    public ResponseEntity<Map<String, Object>> addToGroupById(@PathVariable String groupId, @RequestBody String requestJsonData) throws JsonProcessingException {
         JsonNode jsonNode = objectMapper.readTree(requestJsonData);
         String userId = jsonNode.get("user_id").asText();
-        GroupChat add_to_groupchat = groupChatService.addToGroupById(groupId, userId);
-        if (add_to_groupchat != null) {
-            return new ResponseEntity<>(add_to_groupchat, HttpStatus.OK);
+        Map<String, Object> result = groupChatService.addToGroupById(groupId, userId);
+
+        if (result != null) {
+            return new ResponseEntity<>(result, HttpStatus.OK);
         } else {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
