@@ -1,5 +1,4 @@
 import Logo from "../assets/logo.png";
-import Profile from "../assets/profile.png";
 import SendIcon from "../assets/send.png";
 import { useState, useEffect, useRef } from "react";
 import { useParams } from 'react-router-dom';
@@ -7,6 +6,8 @@ import { getAndUpdateGroupMemberAPI } from "../axios/getAndUpdateGroup";
 import sockjs from "sockjs-client/dist/sockjs"
 import Stomp from 'stompjs';
 import { createChatAPI } from "../axios/createChat";
+import { getGroupChatByIdAPI } from "../axios/getGroupChatById";
+
 type Chat = {
   id: string;
   message: string;
@@ -40,85 +41,77 @@ function ChatPage() {
     return null;
   }
   const [userId, setUserId] = useState(getCookieValue('UserId'));
-  console.log("userId", userId);
-
   // Fetch GroupChat Data
   const { groupId } = useParams();
-  console.log("param", groupId);
   const [Group, setGroup] = useState<{ userCount: number; chats: Chat[]; groupChats: GroupChat[] } | null>(null);
   useEffect(() => {
     const fetchData = async () => {
       if (userId === null){
         setUserId(" ");
-        console.log("1",userId);
       }
       try {
-        //chnage fetch api to get the group by id then check userid from cookie in group by id, if user is not in group then fetch add(make api adjustment to return only user object) to group then update userid in cookie
+        console.log("called1")
         if (groupId && userId) {
-          console.log("2",userId);
-          const getAndUpdateGroupMemberAPIResponse = await getAndUpdateGroupMemberAPI(groupId, userId);
-          if (getAndUpdateGroupMemberAPIResponse) {
-            console.log("getAndUpdateGroupMemberAPIResponse", getAndUpdateGroupMemberAPIResponse.data);
-            const sortedChats = getAndUpdateGroupMemberAPIResponse.data.chats.sort((a: Chat, b: Chat) => {
-              // Extract timestamp components
-              const [yearA, monthA, dayA, hourA, minuteA, secondA] = a.timestamp;
-              const [yearB, monthB, dayB, hourB, minuteB, secondB] = b.timestamp;
-  
-              // Compare timestamp components
-              if (yearA !== yearB) {
-                return yearA - yearB;
+          const getGroupChatAPIResponse = await getGroupChatByIdAPI(groupId);
+          if (getGroupChatAPIResponse) {
+            console.log("called2")
+            const isUserInGroup = getGroupChatAPIResponse.data.groupChats.some((user: GroupChat) => user.id === userId);
+            console.log(userId)
+            console.log("isUserInGroup", isUserInGroup)
+            if (isUserInGroup){
+              console.log("called3")
+              const sortedChats = getGroupChatAPIResponse.data.chats.sort((a: Chat, b: Chat) => {
+                const [yearA, monthA, dayA, hourA, minuteA, secondA] = a.timestamp;
+                const [yearB, monthB, dayB, hourB, minuteB, secondB] = b.timestamp;
+                if (yearA !== yearB) {return yearA - yearB;}
+                if (monthA !== monthB) {return monthA - monthB;}
+                if (dayA !== dayB) {return dayA - dayB;}
+                if (hourA !== hourB) {return hourA - hourB;}
+                if (minuteA !== minuteB) {return minuteA - minuteB;}
+                return secondA - secondB;
+              });
+              const sortedGroupChats = getGroupChatAPIResponse.data.groupChats.sort((a: GroupChat, b: GroupChat) => {
+                const [yearA, monthA, dayA, hourA, minuteA, secondA] = a.timestamp;
+                const [yearB, monthB, dayB, hourB, minuteB, secondB] = b.timestamp;
+                if (yearA !== yearB) {return yearA - yearB;}
+                if (monthA !== monthB) {return monthA - monthB;}
+                if (dayA !== dayB) {return dayA - dayB;}
+                if (hourA !== hourB) {return hourA - hourB;}
+                if (minuteA !== minuteB) {return minuteA - minuteB;}
+                return secondA - secondB;
+              });
+              const updatedGroup = {
+                ...getGroupChatAPIResponse.data,
+                chats: sortedChats,
+                groupChats: sortedGroupChats,
+              };
+              setGroup(updatedGroup);
+              console.log("updatedGroup", updatedGroup);
+            } else {
+              try {
+                console.log("called4")
+                const UpdateGroupMemberAPIResponse = await getAndUpdateGroupMemberAPI(groupId, userId);
+                if (UpdateGroupMemberAPIResponse && UpdateGroupMemberAPIResponse.data.user){
+                  console.log("UpdateGroupMemberAPIResponse", UpdateGroupMemberAPIResponse.data)
+                  setUserId(UpdateGroupMemberAPIResponse.data.user.id);
+                  document.cookie = `UserId=${UpdateGroupMemberAPIResponse.data.user.id}; path=/; SameSite=None; Secure;`;
+                  console.log("success");
+                  // Reload the page after updating the userId
+                  // window.location.reload();
+                }
+              } catch (error){
+                console.error('Error fetching data:', error);
               }
-              if (monthA !== monthB) {
-                return monthA - monthB;
-              }
-              if (dayA !== dayB) {
-                return dayA - dayB;
-              }
-              if (hourA !== hourB) {
-                return hourA - hourB;
-              }
-              if (minuteA !== minuteB) {
-                return minuteA - minuteB;
-              }
-              return secondA - secondB;
-            });
-            const sortedGroupChats = getAndUpdateGroupMemberAPIResponse.data.groupChats.sort((a: GroupChat, b: GroupChat) => {
-              const [yearA, monthA, dayA, hourA, minuteA, secondA] = a.timestamp;
-              const [yearB, monthB, dayB, hourB, minuteB, secondB] = b.timestamp;
-              if (yearA !== yearB) {
-                return yearA - yearB;
-              }
-              if (monthA !== monthB) {
-                return monthA - monthB;
-              }
-              if (dayA !== dayB) {
-                return dayA - dayB;
-              }
-              if (hourA !== hourB) {
-                return hourA - hourB;
-              }
-              if (minuteA !== minuteB) {
-                return minuteA - minuteB;
-              }
-              return secondA - secondB;
-            });
-            const updatedGroup = {
-              ...getAndUpdateGroupMemberAPIResponse.data,
-              chats: sortedChats,
-              groupChats: sortedGroupChats,
-            };
-            setGroup(updatedGroup);
-            console.log("updatedGroup", updatedGroup);
-            const last_index = updatedGroup.groupChats.length - 1;
-            document.cookie = `UserId=${updatedGroup.groupChats[last_index].id}; path=/; SameSite=None; Secure;`;
+            }
           }
         }
+        
       } catch (error) {
         console.error('Error fetching data:', error);
       }
     };
     fetchData();
-  }, [groupId]);
+  }, [userId]);
 
   // Socket
   const [messages, setMessages] = useState<Chat[]>([]);
@@ -184,15 +177,10 @@ function ChatPage() {
           <img src={Logo} alt="logo" className="w-[150px] h-[70px]" />
         </div>
         <div className="w-[40%] flex justify-start items-start relative ">
-          <div className="w-[20%]">
-            <img src={Profile} className="w-[50px] absolute top-1/2 transform -translate-y-1/2 left-0" />
-            <img src={Profile} className="w-[50px] absolute top-1/2 transform -translate-y-1/2 left-8" />
-            <img src={Profile} className="w-[50px] absolute top-1/2 transform -translate-y-1/2 left-16" />
-          </div>
-
-          <div className="w-[20%] flex justify-start items-center text-[#5F5F5F]">
-            {Group?.userCount} People
-          </div>
+            <div className="block">
+              <div className="text-[20px] font-bold">{Group?.name}</div>
+              <p className="text-[10px] font-500 text-[#5F5F5F]">{Group?.userCount} People</p>
+            </div>
         </div>
         <div className="w-[30%] flex justify-end items-center">
           <button className="bg-red-500 text-white px-4 py-2 rounded-[10px]">End Chat</button>
